@@ -1,0 +1,3 @@
+[submodule "lib/simple-tuya-kit"]
+	path = lib/simple-tuya-kit
+	url = git@github.com:szjakub/simple-tuya-kit.git

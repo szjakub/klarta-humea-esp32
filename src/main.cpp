@@ -1,7 +1,10 @@
 #include "Arduino.h"
 #include "HardwareSerial.h"
 
+extern "C"
+{
 #include "simpletuya.h"
+}
 
 
 BytesArray healthcheck = {.len=7, .bytes={0x55, 0xAA, 0x00, 0x00, 0x00, 0x00, 0xFF}};
