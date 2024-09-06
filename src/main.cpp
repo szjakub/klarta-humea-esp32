@@ -6,17 +6,13 @@ extern "C"
 #include "simpletuya.h"
 }
 
-
-BytesArray healthcheck = {.len=7, .bytes={0x55, 0xAA, 0x00, 0x00, 0x00, 0x00, 0xFF}};
-size_t healthcheck_interval = 15000;
-
-LastState lastState;
+#define HEALTHCHECK_INTERVAL 15000 // ms
 
 HardwareSerial *serial = &Serial1;
 
 void send_healthcheck(void);
 void mcu_handler(void);
-
+void write_data_frame(DataFrame *frame);
 
 void setup() {
     serial->begin(9600);
@@ -25,18 +21,6 @@ void setup() {
 void loop() {
     send_healthcheck();
     mcu_handler();
-}
-
-
-void send_healthcheck(void)
-{
-    static unsigned long last_healthcheck;
-    size_t current_time = millis();
-    if (current_time > last_healthcheck + healthcheck_interval)
-    {
-        last_healthcheck = current_time;
-        serial->write(healthcheck.bytes, healthcheck.len);
-    }
 }
 
 void read_serial(BytesArray *buf) {
@@ -53,7 +37,26 @@ void write_data_frame(DataFrame *frame) {
     serial->write(buffer.bytes, buffer.len);
 }
 
+void send_healthcheck(void)
+{
+    static size_t last_healthcheck;
+    size_t current_time = millis();
+    if (current_time > last_healthcheck + HEALTHCHECK_INTERVAL)
+    {
+        DataFrame respFrame;
+        DataFrameDTO params = {
+            .version=0x00,
+            .command=CMD_HEALTHCHECK,
+            .data_type=DT_EMPTY,
+        };
+        init_data_frame(&respFrame, &params);
+        write_data_frame(&respFrame);
+        last_healthcheck = current_time;
+    }
+}
+
 void mcu_handler() {
+    static size_t lastState;
     BytesArray buffer;
     read_serial(&buffer);
     if (buffer.len < DF_MIN_SIZE) { return; }
@@ -111,8 +114,8 @@ void mcu_handler() {
                 .version=0x03,
                 .command=CMD_NETWORK_STATUS,
                 .data_type=DT_RAW,
-                .raw_data=&networkStatusData
             };
+            params.raw_data=&networkStatusData;
             init_data_frame(&respFrame, &params);
             write_data_frame(&respFrame);
             break;
