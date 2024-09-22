@@ -1,4 +1,5 @@
 .pio/
 .cache/
+utils/
 .ccls
 compile_commands.json
