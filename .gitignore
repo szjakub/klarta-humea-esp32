@@ -3,3 +3,4 @@
 utils/
 .ccls
 compile_commands.json
+src/secrets.h

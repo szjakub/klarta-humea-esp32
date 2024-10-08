@@ -1,5 +1,12 @@
 #include "Arduino.h"
 #include "HardwareSerial.h"
+#include <SPI.h>
+#include <WiFi.h>
+#include <PubSubClient.h>
+
+#include <cstdint>
+#include <klarta.h>
+#include <secrets.h>
 
 extern "C"
 {
@@ -9,56 +16,82 @@ extern "C"
 #ifdef DEBUG
     #define LOG(data) { Serial.print(data); }
     #define LOGLN(data) { Serial.println(data); }
+    #define LOGBUF(buffer, prefix)                  \
+    ({                                              \
+        char *str = bytes_array_to_str(&buffer);    \
+        Serial.print(prefix);                       \
+        Serial.print(" ");                          \
+        Serial.println(str);                        \
+        free(str);                                  \
+    })
 #else
     #define LOG(data) {}
     #define LOGLN(data) {}
+    #define LOGBUF(buffer, prefix) {}
 #endif
 
-#define HEALTHCHECK_INTERVAL 15000 // ms
+#define RX_1 12
+#define TX_1 13
 
-typedef enum ParserState {
-    STATE_HEADER_HIGH,
-    STATE_HEADER_LOW,
-    STATE_VERSION,
-    STATE_COMMAND,
-    STATE_DATA_LEN_HIGH,
-    STATE_DATA_LEN_LOW,
-    STATE_DATA,
-    STATE_CHECKSUM
-} ParserState;
+void callback(char *topic, byte *payload, unsigned int lenght);
+void send_data(DataFrame *frame);
+void send_healthcheck(void);
+void mcu_handler(HardwareSerial *serial);
+void write_data_frame(DataFrame *frame);
+bool serial_read_frame(HardwareSerial *serial, BytesArray *buffer);
 
 HardwareSerial *serial = &Serial1;
 
-void send_healthcheck(void);
-
-void mcu_handler(void);
-
-void write_data_frame(DataFrame *frame);
-
-bool serial_read_frame(HardwareSerial *serial, BytesArray *buffer);
+IPAddress server(192, 168, 1, 21);
+WiFiClient wifi_client;
+PubSubClient mqtt_client(server, 1883, callback, wifi_client);
 
 void setup() {
 #ifdef DEBUG
     Serial.begin(115200);
 #endif
-    serial->begin(9600);
+    WiFi.mode(WIFI_STA);
+    WiFi.disconnect(true);
+    WiFi.setHostname(HOSTNAME);
+    WiFi.begin(SSID, PASSWORD);
+    while (WiFi.status() != WL_CONNECTED) {
+        delay(500);
+        LOG('.');
+    }
+
+    mqtt_client.setClient(wifi_client);
+    if(mqtt_client.connect("arduinoClient", "klarta", "password1")) {
+        mqtt_client.subscribe("klarta/humidity/set");
+        mqtt_client.subscribe("klarta/fan-speed/set");
+        mqtt_client.subscribe("klarta/state/set");
+        mqtt_client.subscribe("klarta/auto/set");
+        mqtt_client.subscribe("klarta/night-mode/set");
+    }
+    serial->begin(9600, SERIAL_8N1, RX_1, TX_1);
 }
 
 void loop() {
     send_healthcheck();
-    mcu_handler();
+    mcu_handler(serial);
 }
 
+
+void callback(char* topic, byte *payload, unsigned int lenght) {
+    Serial.println(topic);
+    Serial.println(lenght);
+    for (int i=0; i<lenght; i++) {
+        Serial.print(*payload++, HEX);
+        Serial.print(" ");
+    }
+    int h = (payload[0] - '0') * 10 + payload[1] - '0';
+    Serial.println(h);
+
+}
 
 void write_data_frame(DataFrame *frame) {
     BytesArray buffer;
     df2bytes(&buffer, frame);
-#ifdef DEBUG
-    char *str = bytes_array_to_str(&buffer);
-    Serial.print("TX ");
-    Serial.println(str);
-    free(str);
-#endif
+    LOGBUF(buffer, "TX");
     serial->write(buffer.bytes, buffer.len);
 }
 
@@ -67,6 +100,7 @@ void send_healthcheck(void)
 {
     static unsigned long last_healthcheck = 0;
     unsigned long current_time = millis();
+
     if (current_time > last_healthcheck + HEALTHCHECK_INTERVAL)
     {
         DataFrame respFrame;
@@ -81,118 +115,46 @@ void send_healthcheck(void)
     }
 }
 
-
-bool serial_read_frame(HardwareSerial *serial, BytesArray *dest)
+void send_data(DataFrame *frame)
 {
-    static ParserState state = STATE_HEADER_HIGH;
-    static uint16_t data_len = 0;
-    static uint16_t data_idx = 0;
+    if (frame->data_type != DT_UNIT) {
+        return;
+    }
 
-    while (serial->available()) {
-        uint8_t in_byte = serial->read();
-
-        switch (state) {
-            case STATE_HEADER_HIGH: {
-                if (in_byte == 0x55) {
-                    dest->bytes[dest->len++] = in_byte;
-                    state = STATE_HEADER_LOW;
-                } else {
-                    dest->len = 0;
-                }
-                break;
-            }
-
-            case STATE_HEADER_LOW: {
-                if (in_byte == 0xAA) {
-                    state = STATE_VERSION;
-                    dest->bytes[dest->len++] = in_byte;
-                } else {
-                    state = STATE_HEADER_HIGH;
-                    dest->len = 0;
-                }
-                break;
-            }
-
-            case STATE_VERSION: {
-                state = STATE_COMMAND;
-                dest->bytes[dest->len++] = in_byte;
-                break;
-            }
-
-            case STATE_COMMAND: {
-                state = STATE_DATA_LEN_HIGH;
-                dest->bytes[dest->len++] = in_byte;
-                break;
-            }
-
-            case STATE_DATA_LEN_HIGH: {
-                state = STATE_DATA_LEN_LOW;
-                dest->bytes[dest->len++] = in_byte;
-                data_len = in_byte << 8;
-                break;
-            }
-
-            case STATE_DATA_LEN_LOW: {
-                dest->bytes[dest->len++] = in_byte;
-                data_len |= in_byte;
-
-                if (data_len > DATA_BUFFER_SIZE - DF_MIN_SIZE) {
-                    LOGLN("Data too long");
-                    state = STATE_HEADER_HIGH;
-                    data_len = 0;
-                    dest->len = 0;
-                } else if (data_len == 0) {
-                    state = STATE_CHECKSUM;
-                } else {
-                    data_idx = 0;
-                    state = STATE_DATA;
-                }
-                break;
-            }
-
-            case STATE_DATA: {
-                dest->bytes[dest->len++] = in_byte;
-                data_idx++;
-                if (data_idx >= data_len) {
-                    state = STATE_CHECKSUM;
-                }
-                break;
-            }
-
-            case STATE_CHECKSUM: {
-                uint8_t expected_checksum = calculate_bytes_checksum(dest->bytes, dest->len);
-                if (expected_checksum != in_byte) {
-                    LOG("Invalid checksum: ");
-                    LOGLN(in_byte);
-                    LOG("Expected checksum: ");
-                    LOGLN(expected_checksum);
-                }
-                dest->bytes[dest->len++] = in_byte;
-#ifdef DEBUG
-                char *str = bytes_array_to_str(dest);
-                Serial.print("RX ");
-                Serial.println(str);
-                free(str);
-#endif
-                state = STATE_HEADER_HIGH;
-                data_len = 0;
-                return true;
-            }
+    DataUnit *du = frame->data_unit;
+    switch(du->dpid) {
+        case DPID_HUMIDITY: {
+            LOG("Sending humidity: ");
+            LOGLN(du->int_value);
+            char str_value[4];
+            sprintf(str_value, "%d", du->int_value);
+            mqtt_client.publish("klarta/humidity/get", str_value);
         }
     }
-    return false;
 }
 
-
-void mcu_handler()
+void mcu_handler(HardwareSerial *serial)
 {
     static size_t lastState;
     static BytesArray buffer;
     static bool initialized = false;
-    bool is_ready = serial_read_frame(serial, &buffer);
-    if (!is_ready || buffer.len < DF_MIN_SIZE) { return; }
+
+    bool is_ready;
+    while (serial->available()) {
+        uint8_t in_byte = serial->read();
+        is_ready = parse_byte(&buffer, in_byte);
+    }
+
+    if (!is_ready || buffer.len < DF_MIN_SIZE) {
+        return;
+    }
+    LOGBUF(buffer, "RX");
+
     DataFrame *frame = bytes2df(buffer.bytes, buffer.len);
-    if (frame == NULL) { return; }
+    if (frame == NULL) {
+        return;
+    }
+
     switch (frame->command) {
         // <<--- Heartbeat check (0x00)
         case CMD_HEALTHCHECK: {
@@ -219,7 +181,6 @@ void mcu_handler()
                     };
                     init_data_frame(&respFrame, &params);
                     write_data_frame(&respFrame);
-
                 }
             }
             break;
@@ -282,7 +243,13 @@ void mcu_handler()
         }
 
         case CMD_RESET_MODULE: {
-            asm volatile ("jmp 0");
+            // asm volatile ("jmp 0");
+            break;
+        }
+
+        case CMD_QUERY_DATA: {
+            // send status over MQTT
+            send_data(frame);
             break;
         }
     }
