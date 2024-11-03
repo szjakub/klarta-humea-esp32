@@ -1,10 +1,11 @@
 #include "Arduino.h"
-#include "HardwareSerial.h"
 #include <SPI.h>
-#include <WiFi.h>
 #include <PubSubClient.h>
+#include <WiFi.h>
 
+#include "HardwareSerial.h"
 #include <cstdint>
+#include <string.h>
 #include <klarta.h>
 #include <secrets.h>
 
@@ -33,23 +34,36 @@ extern "C"
 #define RX_1 12
 #define TX_1 13
 
-void callback(char *topic, byte *payload, unsigned int lenght);
+void logf(const char *format, ...);
+int ascii_bytes_to_int(byte *payload, unsigned int length, int fallback);
+void mqtt_callback(char *topic, byte *payload, unsigned int length);
+void mqtt_handler(char *topic, byte *payload, unsigned int length);
 void send_data(DataFrame *frame);
 void send_healthcheck(void);
 void mcu_handler(HardwareSerial *serial);
 void write_data_frame(DataFrame *frame);
 bool serial_read_frame(HardwareSerial *serial, BytesArray *buffer);
 
-HardwareSerial *serial = &Serial1;
 
-IPAddress server(192, 168, 1, 21);
+void logf(const char *format, ...) {
+    char buffer[256];
+    va_list args;
+    va_start(args, format);
+    vsnprintf(buffer, sizeof(buffer), format, args);
+    va_end(args);
+    LOG(buffer);
+}
+
+HardwareSerial *serial = &Serial1;
+IPAddress ha_server(192, 168, 1, 21);
 WiFiClient wifi_client;
-PubSubClient mqtt_client(server, 1883, callback, wifi_client);
+PubSubClient mqtt_client(ha_server, 1883, mqtt_callback, wifi_client);
 
 void setup() {
 #ifdef DEBUG
     Serial.begin(115200);
 #endif
+    serial->begin(9600, SERIAL_8N1, RX_1, TX_1);
     WiFi.mode(WIFI_STA);
     WiFi.disconnect(true);
     WiFi.setHostname(HOSTNAME);
@@ -59,33 +73,84 @@ void setup() {
         LOG('.');
     }
 
-    mqtt_client.setClient(wifi_client);
     if(mqtt_client.connect("arduinoClient", "klarta", "password1")) {
-        mqtt_client.subscribe("klarta/humidity/set");
-        mqtt_client.subscribe("klarta/fan-speed/set");
-        mqtt_client.subscribe("klarta/state/set");
-        mqtt_client.subscribe("klarta/auto/set");
-        mqtt_client.subscribe("klarta/night-mode/set");
+        mqtt_client.subscribe(TOPIC_STATE_SET);
+        mqtt_client.subscribe(TOPIC_FAN_SET);
     }
-    serial->begin(9600, SERIAL_8N1, RX_1, TX_1);
 }
 
 void loop() {
+    mqtt_client.loop();
     send_healthcheck();
     mcu_handler(serial);
 }
 
-
-void callback(char* topic, byte *payload, unsigned int lenght) {
-    Serial.println(topic);
-    Serial.println(lenght);
-    for (int i=0; i<lenght; i++) {
-        Serial.print(*payload++, HEX);
-        Serial.print(" ");
+int ascii_bytes_to_int(byte *payload, unsigned int length, int fallback)
+{
+    if (length > 10) {
+        logf("Value of length %d is too big\n", length);
+        return fallback;
     }
-    int h = (payload[0] - '0') * 10 + payload[1] - '0';
-    Serial.println(h);
+    char buffer[11];
 
+    for (int i=0; i<length; i++) {
+        byte value = payload[i];
+        if (value < 0x30 || value > 0x39) {
+            logf("ASCII value of %d is not a number\n", (unsigned char)value);
+            return fallback;
+        }
+        buffer[i] = (char)payload[i];
+    }
+    buffer[length] = '\0';
+    return atoi(buffer);
+}
+
+void mqtt_callback(char *topic, byte *payload, unsigned int length) {
+    if (strcmp(topic, TOPIC_STATE_SET) == 0) {
+        uint8_t state = (uint8_t)ascii_bytes_to_int(payload, length, 0);
+        DataUnit du;
+        DataUnitDTO du_params = {
+            .dpid=DPID_STATE,
+            .type=TYPE_BOOL,
+            .byte_value=state
+        };
+        init_data_unit(&du, &du_params);
+        DataFrame respFrame;
+        DataFrameDTO params = {
+            .version=0x00,
+            .command=CMD_SEND_DATA,
+            .data_type=DT_UNIT,
+            .data_unit=&du
+        };
+        init_data_frame(&respFrame, &params);
+        write_data_frame(&respFrame);
+    } else if (strcmp(topic, TOPIC_FAN_SET) == 0) {
+        uint8_t fan_speed = (uint8_t)ascii_bytes_to_int(payload, length, FAN_LOW);
+        DataUnit du;
+        DataUnitDTO du_params = {
+            .dpid=DPID_STATE,
+            .type=TYPE_CHAR,
+            .byte_value=fan_speed
+        };
+        init_data_unit(&du, &du_params);
+        DataFrame respFrame;
+        DataFrameDTO params = {
+            .version=0x00,
+            .command=CMD_SEND_DATA,
+            .data_type=DT_UNIT,
+            .data_unit=&du
+        };
+        init_data_frame(&respFrame, &params);
+        write_data_frame(&respFrame);
+    }
+
+    LOGLN(topic);
+    for (int i=0; i<length; i++) {
+        LOG((uint8_t)payload[i]);
+        LOG(" ");
+    }
+    LOGLN("")
+    LOGLN(length);
 }
 
 void write_data_frame(DataFrame *frame) {
@@ -124,11 +189,31 @@ void send_data(DataFrame *frame)
     DataUnit *du = frame->data_unit;
     switch(du->dpid) {
         case DPID_HUMIDITY: {
-            LOG("Sending humidity: ");
-            LOGLN(du->int_value);
-            char str_value[4];
+            char str_value[5];
             sprintf(str_value, "%d", du->int_value);
+            logf("Sending humidity: %d", du->int_value);
             mqtt_client.publish("klarta/humidity/get", str_value);
+            break;
+        }
+        case DPID_STATE: {
+            char str_value[2];
+            sprintf(str_value, "%d", du->byte_value);
+            logf("Sending state: %d", du->byte_value);
+            mqtt_client.publish("klarta/state/get", str_value);
+            break;
+        }
+        case DPID_FAN: {
+            char str_value[2];
+            sprintf(str_value, "%d", du->byte_value);
+            logf("Sending fan speed: %d", du->byte_value);
+            mqtt_client.publish("klarta/fan/get", str_value);
+            break;
+        }
+        case DPID_SLEEP: {
+            break;
+        }
+        case DPID_AUTO_MODE: {
+            break;
         }
     }
 }

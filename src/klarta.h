@@ -5,6 +5,13 @@
 
 #define HEALTHCHECK_INTERVAL 15000 // ms
 
+#define TOPIC_STATE_SET "klarta/state/set"
+#define TOPIC_STATE_GET "klarta/state/get"
+
+#define TOPIC_FAN_SET "klarta/fan/set"
+#define TOPIC_FAN_GET "klarta/fan/get"
+
+
 typedef enum
 {
     DPID_HUMIDITY  = 0x6D,
