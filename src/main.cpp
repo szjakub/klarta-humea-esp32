@@ -74,8 +74,13 @@ void setup() {
     }
 
     if(mqtt_client.connect("arduinoClient", "klarta", "password1")) {
-        mqtt_client.subscribe(TOPIC_STATE_SET);
-        mqtt_client.subscribe(TOPIC_FAN_SET);
+        mqtt_client.subscribe(TOPIC_POWER_STATE_SET);
+        mqtt_client.subscribe(TOPIC_NIGHT_LIGHT_SET);
+        mqtt_client.subscribe(TOPIC_SLEEP_MODE_SET);
+        mqtt_client.subscribe(TOPIC_AUTO_MODE_SET);
+        mqtt_client.subscribe(TOPIC_FAN_SPEED_SET);
+        mqtt_client.subscribe(TOPIC_AUTO_MODE_SET);
+        mqtt_client.subscribe(TOPIC_DESIRED_HUMIDITY_SET);
     }
 }
 
@@ -106,11 +111,11 @@ int ascii_bytes_to_int(byte *payload, unsigned int length, int fallback)
 }
 
 void mqtt_callback(char *topic, byte *payload, unsigned int length) {
-    if (strcmp(topic, TOPIC_STATE_SET) == 0) {
+    if (strcmp(topic, TOPIC_POWER_STATE_SET) == 0) {
         uint8_t state = (uint8_t)ascii_bytes_to_int(payload, length, 0);
         DataUnit du;
         DataUnitDTO du_params = {
-            .dpid=DPID_STATE,
+            .dpid=DPID_POWER_STATE,
             .type=TYPE_BOOL,
             .byte_value=state
         };
@@ -124,11 +129,11 @@ void mqtt_callback(char *topic, byte *payload, unsigned int length) {
         };
         init_data_frame(&respFrame, &params);
         write_data_frame(&respFrame);
-    } else if (strcmp(topic, TOPIC_FAN_SET) == 0) {
-        uint8_t fan_speed = (uint8_t)ascii_bytes_to_int(payload, length, FAN_LOW);
+    } else if (strcmp(topic, TOPIC_FAN_SPEED_SET) == 0) {
+        uint8_t fan_speed = (uint8_t)ascii_bytes_to_int(payload, length, FAN_SPEED_LOW);
         DataUnit du;
         DataUnitDTO du_params = {
-            .dpid=DPID_STATE,
+            .dpid=DPID_FAN_SPEED,
             .type=TYPE_CHAR,
             .byte_value=fan_speed
         };
@@ -142,8 +147,79 @@ void mqtt_callback(char *topic, byte *payload, unsigned int length) {
         };
         init_data_frame(&respFrame, &params);
         write_data_frame(&respFrame);
+    } else if (strcmp(topic, TOPIC_AUTO_MODE_SET) == 0) {
+        uint8_t auto_mode = (uint8_t)ascii_bytes_to_int(payload, length, STATE_OFF);
+        DataUnit du;
+        DataUnitDTO du_params = {
+            .dpid=DPID_AUTO_MODE,
+            .type=TYPE_BOOL,
+            .byte_value=auto_mode
+        };
+        init_data_unit(&du, &du_params);
+        DataFrame respFrame;
+        DataFrameDTO params = {
+            .version=0x00,
+            .command=CMD_SEND_DATA,
+            .data_type=DT_UNIT,
+            .data_unit=&du
+        };
+        init_data_frame(&respFrame, &params);
+        write_data_frame(&respFrame);
+    } else if (strcmp(topic, TOPIC_NIGHT_LIGHT_SET) == 0) {
+        uint8_t nlight_level = (uint8_t)ascii_bytes_to_int(payload, length, NIGHT_LIGHT_OFF);
+        DataUnit du;
+        DataUnitDTO du_params = {
+            .dpid=DPID_NIGHT_LIGHT,
+            .type=TYPE_CHAR,
+            .byte_value=nlight_level
+        };
+        init_data_unit(&du, &du_params);
+        DataFrame respFrame;
+        DataFrameDTO params = {
+            .version=0x00,
+            .command=CMD_SEND_DATA,
+            .data_type=DT_UNIT,
+            .data_unit=&du
+        };
+        init_data_frame(&respFrame, &params);
+        write_data_frame(&respFrame);
+    } else if (strcmp(topic, TOPIC_SLEEP_MODE_SET) == 0) {
+        uint8_t sleep_mode = (uint8_t)ascii_bytes_to_int(payload, length, STATE_OFF);
+        DataUnit du;
+        DataUnitDTO du_params = {
+            .dpid=DPID_SLEEP_MODE,
+            .type=TYPE_CHAR,
+            .byte_value=sleep_mode
+        };
+        init_data_unit(&du, &du_params);
+        DataFrame respFrame;
+        DataFrameDTO params = {
+            .version=0x00,
+            .command=CMD_SEND_DATA,
+            .data_type=DT_UNIT,
+            .data_unit=&du
+        };
+        init_data_frame(&respFrame, &params);
+        write_data_frame(&respFrame);
+    } else if (strcmp(topic, TOPIC_DESIRED_HUMIDITY_SET) == 0) {
+        uint8_t des_humidity = (uint8_t)ascii_bytes_to_int(payload, length, DES_HUMIDITY_CO);
+        DataUnit du;
+        DataUnitDTO du_params = {
+            .dpid=DPID_DES_HUMIDITY,
+            .type=TYPE_CHAR,
+            .byte_value=des_humidity
+        };
+        init_data_unit(&du, &du_params);
+        DataFrame respFrame;
+        DataFrameDTO params = {
+            .version=0x00,
+            .command=CMD_SEND_DATA,
+            .data_type=DT_UNIT,
+            .data_unit=&du
+        };
+        init_data_frame(&respFrame, &params);
+        write_data_frame(&respFrame);
     }
-
     LOGLN(topic);
     for (int i=0; i<length; i++) {
         LOG((uint8_t)payload[i]);
@@ -188,31 +264,60 @@ void send_data(DataFrame *frame)
 
     DataUnit *du = frame->data_unit;
     switch(du->dpid) {
-        case DPID_HUMIDITY: {
+        case DPID_POWER_STATE: { // 10 / 0A
+            char str_value[2];
+            sprintf(str_value, "%d", du->byte_value);
+            logf("Sending state: %d\n", du->byte_value);
+            mqtt_client.publish(TOPIC_POWER_STATE_GET, str_value);
+            break;
+        }
+        case DPID_WATER_LEVEL: { // 101 / 65
+            char str_value[2];
+            sprintf(str_value, "%d", du->byte_value);
+            logf("Sending water level state: %d\n", du->byte_value);
+            mqtt_client.publish(TOPIC_WATER_LEVEL_GET, str_value);
+            break;
+        }
+        case DPID_NIGHT_LIGHT: { // 102 / 66
+            char str_value[2];
+            sprintf(str_value, "%d", du->byte_value);
+            logf("Sending night light state: %d\n", du->byte_value);
+            mqtt_client.publish(TOPIC_NIGHT_LIGHT_GET, str_value);
+            break;
+        }
+        case DPID_SLEEP_MODE: { // 103 / 67
+            char str_value[2];
+            sprintf(str_value, "%d", du->byte_value);
+            logf("Sending sleep mode state: %d\n", du->byte_value);
+            mqtt_client.publish(TOPIC_SLEEP_MODE_GET, str_value);
+            break;
+        }
+        case DPID_AUTO_MODE: { // 104 / 68
+            char str_value[2];
+            sprintf(str_value, "%d", du->byte_value);
+            logf("Sending auto mode state: %d\n", du->byte_value);
+            mqtt_client.publish(TOPIC_AUTO_MODE_GET, str_value);
+            break;
+        }
+        case DPID_FAN_SPEED: { // 106 / 6A
+            char str_value[2];
+            sprintf(str_value, "%d", du->byte_value);
+            logf("Sending fan speed level: %d\n", du->byte_value);
+            mqtt_client.publish(TOPIC_FAN_SPEED_GET, str_value);
+            break;
+        }
+        case DPID_HUMIDITY: { // 109 / 6D
             char str_value[5];
             sprintf(str_value, "%d", du->int_value);
-            logf("Sending humidity: %d", du->int_value);
-            mqtt_client.publish("klarta/humidity/get", str_value);
+            logf("Sending humidity: %d\n", du->int_value);
+            mqtt_client.publish(TOPIC_HUMIDITY_GET, str_value);
             break;
         }
-        case DPID_STATE: {
+        case DPID_DES_HUMIDITY: { // 109 / 6D
             char str_value[2];
             sprintf(str_value, "%d", du->byte_value);
-            logf("Sending state: %d", du->byte_value);
-            mqtt_client.publish("klarta/state/get", str_value);
-            break;
-        }
-        case DPID_FAN: {
-            char str_value[2];
-            sprintf(str_value, "%d", du->byte_value);
-            logf("Sending fan speed: %d", du->byte_value);
-            mqtt_client.publish("klarta/fan/get", str_value);
-            break;
-        }
-        case DPID_SLEEP: {
-            break;
-        }
-        case DPID_AUTO_MODE: {
+            logf("Sending desired humidity: %d\n", du->int_value);
+            mqtt_client.publish(TOPIC_DESIRED_HUMIDITY_GET, str_value);
             break;
         }
     }
