@@ -81,6 +81,7 @@ void setup() {
         mqtt_client.subscribe(TOPIC_FAN_SPEED_SET);
         mqtt_client.subscribe(TOPIC_AUTO_MODE_SET);
         mqtt_client.subscribe(TOPIC_DESIRED_HUMIDITY_SET);
+        mqtt_client.subscribe(TOPIC_TIMER_SET);
     }
 }
 
@@ -219,6 +220,24 @@ void mqtt_callback(char *topic, byte *payload, unsigned int length) {
         };
         init_data_frame(&respFrame, &params);
         write_data_frame(&respFrame);
+    } else if (strcmp(topic, TOPIC_TIMER_SET) == 0) {
+        uint8_t timer_value = (uint8_t)ascii_bytes_to_int(payload, length, TIMER_OFF);
+        DataUnit du;
+        DataUnitDTO du_params = {
+            .dpid=DPID_TIMER,
+            .type=TYPE_CHAR,
+            .byte_value=timer_value
+        };
+        init_data_unit(&du, &du_params);
+        DataFrame respFrame;
+        DataFrameDTO params = {
+            .version=0x00,
+            .command=CMD_SEND_DATA,
+            .data_type=DT_UNIT,
+            .data_unit=&du
+        };
+        init_data_frame(&respFrame, &params);
+        write_data_frame(&respFrame);
     }
     LOGLN(topic);
     for (int i=0; i<length; i++) {
@@ -299,6 +318,13 @@ void send_data(DataFrame *frame)
             mqtt_client.publish(TOPIC_AUTO_MODE_GET, str_value);
             break;
         }
+        case DPID_DES_HUMIDITY: { // 105 / 69
+            char str_value[2];
+            sprintf(str_value, "%d", du->byte_value);
+            logf("Sending desired humidity: %d\n", du->int_value);
+            mqtt_client.publish(TOPIC_DESIRED_HUMIDITY_GET, str_value);
+            break;
+        }
         case DPID_FAN_SPEED: { // 106 / 6A
             char str_value[2];
             sprintf(str_value, "%d", du->byte_value);
@@ -306,18 +332,18 @@ void send_data(DataFrame *frame)
             mqtt_client.publish(TOPIC_FAN_SPEED_GET, str_value);
             break;
         }
+        case DPID_TIMER: { // 108 / 6C
+            char str_value[2];
+            sprintf(str_value, "%d", du->byte_value);
+            logf("Sending timer setting: %d\n", du->byte_value);
+            mqtt_client.publish(TOPIC_TIMER_GET, str_value);
+            break;
+        }
         case DPID_HUMIDITY: { // 109 / 6D
             char str_value[5];
             sprintf(str_value, "%d", du->int_value);
             logf("Sending humidity: %d\n", du->int_value);
             mqtt_client.publish(TOPIC_HUMIDITY_GET, str_value);
-            break;
-        }
-        case DPID_DES_HUMIDITY: { // 109 / 6D
-            char str_value[2];
-            sprintf(str_value, "%d", du->byte_value);
-            logf("Sending desired humidity: %d\n", du->int_value);
-            mqtt_client.publish(TOPIC_DESIRED_HUMIDITY_GET, str_value);
             break;
         }
     }

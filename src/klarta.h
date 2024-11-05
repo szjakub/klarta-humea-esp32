@@ -25,6 +25,9 @@
 #define TOPIC_FAN_SPEED_SET "klarta/fan/set"
 #define TOPIC_FAN_SPEED_GET "klarta/fan/get"
 
+#define TOPIC_TIMER_SET "klarta/timer/set"
+#define TOPIC_TIMER_GET "klarta/timer/get"
+
 #define TOPIC_HUMIDITY_GET "klarta/humidity/get"
 
 
@@ -55,7 +58,7 @@ typedef enum
     DPID_DES_HUMIDITY   = 0x69,
     DPID_FAN_SPEED      = 0x6A,
     DPID_FILTER_STATUS  = 0x6B,
-    DPID_TIMER_SETTINGS = 0x6C,
+    DPID_TIMER          = 0x6C,
     DPID_HUMIDITY       = 0x6D
 } DPID;
 
@@ -103,4 +106,21 @@ typedef enum
     DES_HUMIDITY_70 = 0x07,
     DES_HUMIDITY_75 = 0x08
 } DesiredHumidity;
+
+typedef enum
+{
+    TIMER_OFF = 0x00,
+    TIMER_01H = 0x01,
+    TIMER_02H = 0x02,
+    TIMER_03H = 0x03,
+    TIMER_04H = 0x04,
+    TIMER_05H = 0x05,
+    TIMER_06H = 0x06,
+    TIMER_07H = 0x07,
+    TIMER_08H = 0x08,
+    TIMER_09H = 0x09,
+    TIMER_10H = 0x0A,
+    TIMER_11H = 0x0B,
+    TIMER_12H = 0x0C,
+} TimerSetting;
 
