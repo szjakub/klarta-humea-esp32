@@ -1,0 +1,159 @@
+# Automation.
+
+############################
+#    KLARTA AUTOMATIONS
+############################
+## FAN SPEED
+- alias: "Set Klarta Fan Speed Selector"
+  trigger:
+    - platform: mqtt
+      topic: "klarta/fan/get"
+  action:
+    - service: input_select.select_option
+      target:
+        entity_id: input_select.klarta_fan_speed
+      data:
+        option: >
+          {% set reverse_mapping = {'0': 'Low', '1': 'Medium', '2': 'High', '3': 'Turbo'} %}
+          {{ reverse_mapping.get(trigger.payload, 'unknown') }}
+
+- alias: "Set Klarta Fan Speed"
+  trigger:
+    - platform: state
+      entity_id: input_select.klarta_fan_speed
+  action:
+    - service: mqtt.publish
+      data:
+        topic: "klarta/fan/set"
+        retain: false
+        payload: >
+          {% set mapping = {'Low': 0, 'Medium': 1, 'High': 2, 'Turbo': 3} %}
+          {{ mapping.get(states('input_select.klarta_fan_speed'), 'unknown') }}
+## NIGHT LIGHT
+- alias: "Set Klarta Night Light Level Selector"
+  trigger:
+    - platform: mqtt
+      topic: "klarta/nlight/get"
+  action:
+    - service: input_select.select_option
+      target:
+        entity_id: input_select.klarta_night_light
+      data:
+        option: >
+          {% set reverse_mapping = {'0': 'Off', '1': 'Low', '2': 'Medium', '3': 'High'} %}
+          {{ reverse_mapping.get(trigger.payload, 'unknown') }}
+- alias: "Set Klarta Night Light Level"
+  trigger:
+    - platform: state
+      entity_id: input_select.klarta_night_light
+  action:
+    - service: mqtt.publish
+      data:
+        topic: "klarta/nlight/set"
+        retain: false
+        payload: >
+          {% set mapping = {'Off': 0, 'Low': 1, 'Medium': 2, 'High': 3} %}
+          {{ mapping.get(states('input_select.klarta_night_light'), 'unknown') }}
+
+## DESIRED HUMIDITY
+- alias: "Set Klarta Desired Humidity Selector"
+  trigger:
+    - platform: mqtt
+      topic: "klarta/deshum/get"
+  action:
+    - service: input_select.select_option
+      target:
+        entity_id: input_select.klarta_desired_humidity
+      data:
+        option: >
+          {% set reverse_mapping = {
+            '0': 'Constinuously',
+            '1': '40',
+            '2': '45',
+            '3': '50',
+            '4': '55',
+            '5': '60',
+            '6': '65',
+            '7': '70',
+            '8': '75'
+          } %}
+          {{ reverse_mapping.get(trigger.payload, 'unknown') }}
+- alias: "Set Klarta Desired Humidity"
+  trigger:
+    - platform: state
+      entity_id: input_select.klarta_desired_humidity
+  action:
+    - service: mqtt.publish
+      data:
+        topic: "klarta/deshum/set"
+        retain: false
+        payload: >
+          {% set mapping = {
+            'Constinuously': 0,
+            '40': 1,
+            '45': 2,
+            '50': 3,
+            '55': 4,
+            '60': 5,
+            '65': 6,
+            '70': 7,
+            '75': 8
+          } %}
+          {{ mapping.get(states('input_select.klarta_desired_humidity'), 'unknown') }}
+
+## TIMER
+- alias: "Set Klarta Timer Selector"
+  trigger:
+    - platform: mqtt
+      topic: "klarta/timer/get"
+  action:
+    - service: input_select.select_option
+      target:
+        entity_id: input_select.klarta_timer_setting
+      data:
+        option: >
+          {% set reverse_mapping = {
+            '0': 'Off',
+            '1': '1h',
+            '2': '2h',
+            '3': '3h',
+            '4': '4h',
+            '5': '5h',
+            '6': '6h',
+            '7': '7h',
+            '8': '8h',
+            '9': '9h',
+            '10': '10h',
+            '11': '11h',
+            '12': '12h'
+          } %}
+          {{ reverse_mapping.get(trigger.payload, 'unknown') }}
+- alias: "Set Klarta Timer"
+  trigger:
+    - platform: state
+      entity_id: input_select.klarta_timer_setting
+  action:
+    - service: mqtt.publish
+      data:
+        topic: "klarta/timer/set"
+        retain: false
+        payload: >
+          {% set mapping = {
+            'Off': 0,
+            '1h': 1,
+            '2h': 2,
+            '3h': 3,
+            '4h': 4,
+            '5h': 5,
+            '6h': 6,
+            '7h': 7,
+            '8h': 8,
+            '9h': 9,
+            '10h': 10,
+            '11h': 11,
+            '12h': 12,
+          } %}
+          {{ mapping.get(states('input_select.klarta_timer_setting'), 'unknown') }}
+############################
+#  END KLARTA AUTOMATIONS
+############################

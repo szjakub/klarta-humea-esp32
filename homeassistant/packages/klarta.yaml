@@ -1,0 +1,97 @@
+mqtt:
+  sensor:
+    - name: "Humidity"
+      object_id: "klarta_humidity_get"
+      unique_id: "klarta_humidity_get"
+      state_topic: "klarta/humidity/get"
+      unit_of_measurement: "%"
+
+    # - name: "klarta_fan"
+    #   unique_id: "klarta_fan_get"
+    #   state_topic: "klarta/fan/get"
+
+  switch:
+    - name: "Klarta Power State"
+      object_id: "klarta_state_switch"
+      unique_id: "klarta_state_switch"
+      command_topic: "klarta/state/set"
+      state_topic: "klarta/state/get"
+      payload_on: "1"
+      payload_off: "0"
+
+    - name: "Klarta Auto Mode"
+      object_id: "klarta_auto_mode_switch"
+      unique_id: "klarta_auto_mode_switch"
+      command_topic: "klarta/auto/set"
+      state_topic: "klarta/auto/get"
+      payload_on: "1"
+      payload_off: "0"
+
+    - name: "Klarta Sleep Mode"
+      object_id: "klarta_sleep_mode_switch"
+      unique_id: "klarta_sleep_mode_switch"
+      command_topic: "klarta/sleep/set"
+      state_topic: "klarta/sleep/get"
+      payload_on: "1"
+      payload_off: "0"
+
+  binary_sensor:
+    - name: "Klarta Water Level"
+      object_id: "klarta_water_level_sensor"
+      unique_id: "klarta_water_level_sensor"
+      state_topic: "klarta/wtrlvl/get"
+      payload_on: "1"
+      payload_off: "0"
+      device_class: "moisture"
+
+input_select:
+  klarta_fan_speed:
+    name: Klarta Fan Speed
+    options:
+      - "Low"
+      - "Medium"
+      - "High"
+      - "Turbo"
+    icon: mdi:fan
+
+  klarta_night_light:
+    name: Klarta Night Light Level
+    options:
+      - "Off"
+      - "Low"
+      - "Medium"
+      - "High"
+    icon: mdi:lightbulb-variant
+
+  klarta_desired_humidity:
+    name: Klarta Desired Humidity
+    options:
+      - "Constinuously"
+      - "40"
+      - "45"
+      - "50"
+      - "55"
+      - "60"
+      - "65"
+      - "70"
+      - "75"
+    icon: mdi:lightbulb-variant
+
+  klarta_timer_setting:
+    name: Klarta Timer
+    options:
+      - "Off"
+      - "1h"
+      - "2h"
+      - "3h"
+      - "4h"
+      - "5h"
+      - "6h"
+      - "7h"
+      - "8h"
+      - "9h"
+      - "10h"
+      - "11h"
+      - "12h"
+    icon: mdi:clock
+

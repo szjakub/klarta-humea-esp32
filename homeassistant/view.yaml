@@ -1,0 +1,27 @@
+# example view
+
+views:
+  - title: Home
+    badges: []
+    cards:
+      - type: gauge
+        entity: sensor.humidity_2 # might be different name
+      - type: entities
+        entities:
+          - entity: switch.state
+          - entity: binary_sensor.klarta_water_level_sensor
+          - entity: input_select.klarta_fan_speed
+          - entity: switch.klarta_auto_mode_switch
+          - entity: input_select.klarta_desired_humidity
+            icon: mdi:water-percent
+          - entity: input_select.klarta_night_light
+          - entity: input_select.klarta_timer_setting
+        state_color: false
+        title: Settings
+        show_header_toggle: false
+      - type: history-graph
+        entities:
+          - entity: sensor.humidity_2
+        logarithmic_scale: false
+        hours_to_show: 24
+        title: Last 24h
