@@ -31,6 +31,7 @@
 #define TOPIC_HUMIDITY_GET "klarta/humidity/get"
 
 
+
 /*
  * |    DPID    |
  * | Dec | Hex  | Type | Allowed Values |    Description    |

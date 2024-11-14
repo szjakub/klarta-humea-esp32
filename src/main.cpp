@@ -34,7 +34,7 @@ extern "C"
 #define RX_1 12
 #define TX_1 13
 
-void logf(const char *format, ...);
+void logfmt(const char *format, ...);
 int ascii_bytes_to_int(byte *payload, unsigned int length, int fallback);
 void mqtt_callback(char *topic, byte *payload, unsigned int length);
 void mqtt_handler(char *topic, byte *payload, unsigned int length);
@@ -44,8 +44,7 @@ void mcu_handler(HardwareSerial *serial);
 void write_data_frame(DataFrame *frame);
 bool serial_read_frame(HardwareSerial *serial, BytesArray *buffer);
 
-
-void logf(const char *format, ...) {
+void logfmt(const char *format, ...) {
     char buffer[256];
     va_list args;
     va_start(args, format);
@@ -55,9 +54,9 @@ void logf(const char *format, ...) {
 }
 
 HardwareSerial *serial = &Serial1;
-IPAddress ha_server(192, 168, 1, 21);
-WiFiClient wifi_client;
-PubSubClient mqtt_client(ha_server, 1883, mqtt_callback, wifi_client);
+IPAddress haServerIP(HA_SERVER_ADDR);
+WiFiClient wifiClient;
+PubSubClient mqttClient(haServerIP, 1883, mqtt_callback, wifiClient);
 
 void setup() {
 #ifdef DEBUG
@@ -66,27 +65,27 @@ void setup() {
     serial->begin(9600, SERIAL_8N1, RX_1, TX_1);
     WiFi.mode(WIFI_STA);
     WiFi.disconnect(true);
-    WiFi.setHostname(HOSTNAME);
-    WiFi.begin(SSID, PASSWORD);
+    WiFi.setHostname(WIFI_HOSTNAME);
+    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
     while (WiFi.status() != WL_CONNECTED) {
         delay(500);
         LOG('.');
     }
 
-    if(mqtt_client.connect("arduinoClient", "klarta", "password1")) {
-        mqtt_client.subscribe(TOPIC_POWER_STATE_SET);
-        mqtt_client.subscribe(TOPIC_NIGHT_LIGHT_SET);
-        mqtt_client.subscribe(TOPIC_SLEEP_MODE_SET);
-        mqtt_client.subscribe(TOPIC_AUTO_MODE_SET);
-        mqtt_client.subscribe(TOPIC_FAN_SPEED_SET);
-        mqtt_client.subscribe(TOPIC_AUTO_MODE_SET);
-        mqtt_client.subscribe(TOPIC_DESIRED_HUMIDITY_SET);
-        mqtt_client.subscribe(TOPIC_TIMER_SET);
+    if(mqttClient.connect(MQTT_CLIENT_ID, MQTT_USER, MQTT_PASSWORD)) {
+        mqttClient.subscribe(TOPIC_POWER_STATE_SET);
+        mqttClient.subscribe(TOPIC_NIGHT_LIGHT_SET);
+        mqttClient.subscribe(TOPIC_SLEEP_MODE_SET);
+        mqttClient.subscribe(TOPIC_AUTO_MODE_SET);
+        mqttClient.subscribe(TOPIC_FAN_SPEED_SET);
+        mqttClient.subscribe(TOPIC_AUTO_MODE_SET);
+        mqttClient.subscribe(TOPIC_DESIRED_HUMIDITY_SET);
+        mqttClient.subscribe(TOPIC_TIMER_SET);
     }
 }
 
 void loop() {
-    mqtt_client.loop();
+    mqttClient.loop();
     send_healthcheck();
     mcu_handler(serial);
 }
@@ -94,7 +93,7 @@ void loop() {
 int ascii_bytes_to_int(byte *payload, unsigned int length, int fallback)
 {
     if (length > 10) {
-        logf("Value of length %d is too big\n", length);
+        logfmt("Value of length %d is too big\n", length);
         return fallback;
     }
     char buffer[11];
@@ -102,7 +101,7 @@ int ascii_bytes_to_int(byte *payload, unsigned int length, int fallback)
     for (int i=0; i<length; i++) {
         byte value = payload[i];
         if (value < 0x30 || value > 0x39) {
-            logf("ASCII value of %d is not a number\n", (unsigned char)value);
+            logfmt("ASCII value of %d is not a number\n", (unsigned char)value);
             return fallback;
         }
         buffer[i] = (char)payload[i];
@@ -239,13 +238,18 @@ void mqtt_callback(char *topic, byte *payload, unsigned int length) {
         init_data_frame(&respFrame, &params);
         write_data_frame(&respFrame);
     }
-    LOGLN(topic);
+    logfmt("Received data from mqtt topic %s - ", topic);
     for (int i=0; i<length; i++) {
-        LOG((uint8_t)payload[i]);
-        LOG(" ");
+        logfmt("0x%02X ",(uint8_t)payload[i]);
     }
-    LOGLN("")
-    LOGLN(length);
+    logfmt("\n");
+    // LOGLN(topic);
+    // for (int i=0; i<length; i++) {
+    //     LOG((uint8_t)payload[i]);
+    //     LOG(" ");
+    // }
+    // LOGLN("")
+    // LOGLN(length);
 }
 
 void write_data_frame(DataFrame *frame) {
@@ -286,64 +290,64 @@ void send_data(DataFrame *frame)
         case DPID_POWER_STATE: { // 10 / 0A
             char str_value[2];
             sprintf(str_value, "%d", du->byte_value);
-            logf("Sending state: %d\n", du->byte_value);
-            mqtt_client.publish(TOPIC_POWER_STATE_GET, str_value);
+            logfmt("Sending state: %d\n", du->byte_value);
+            mqttClient.publish(TOPIC_POWER_STATE_GET, str_value);
             break;
         }
         case DPID_WATER_LEVEL: { // 101 / 65
             char str_value[2];
             sprintf(str_value, "%d", du->byte_value);
-            logf("Sending water level state: %d\n", du->byte_value);
-            mqtt_client.publish(TOPIC_WATER_LEVEL_GET, str_value);
+            logfmt("Sending water level state: %d\n", du->byte_value);
+            mqttClient.publish(TOPIC_WATER_LEVEL_GET, str_value);
             break;
         }
         case DPID_NIGHT_LIGHT: { // 102 / 66
             char str_value[2];
             sprintf(str_value, "%d", du->byte_value);
-            logf("Sending night light state: %d\n", du->byte_value);
-            mqtt_client.publish(TOPIC_NIGHT_LIGHT_GET, str_value);
+            logfmt("Sending night light state: %d\n", du->byte_value);
+            mqttClient.publish(TOPIC_NIGHT_LIGHT_GET, str_value);
             break;
         }
         case DPID_SLEEP_MODE: { // 103 / 67
             char str_value[2];
             sprintf(str_value, "%d", du->byte_value);
-            logf("Sending sleep mode state: %d\n", du->byte_value);
-            mqtt_client.publish(TOPIC_SLEEP_MODE_GET, str_value);
+            logfmt("Sending sleep mode state: %d\n", du->byte_value);
+            mqttClient.publish(TOPIC_SLEEP_MODE_GET, str_value);
             break;
         }
         case DPID_AUTO_MODE: { // 104 / 68
             char str_value[2];
             sprintf(str_value, "%d", du->byte_value);
-            logf("Sending auto mode state: %d\n", du->byte_value);
-            mqtt_client.publish(TOPIC_AUTO_MODE_GET, str_value);
+            logfmt("Sending auto mode state: %d\n", du->byte_value);
+            mqttClient.publish(TOPIC_AUTO_MODE_GET, str_value);
             break;
         }
         case DPID_DES_HUMIDITY: { // 105 / 69
             char str_value[2];
             sprintf(str_value, "%d", du->byte_value);
-            logf("Sending desired humidity: %d\n", du->int_value);
-            mqtt_client.publish(TOPIC_DESIRED_HUMIDITY_GET, str_value);
+            logfmt("Sending desired humidity: %d\n", du->int_value);
+            mqttClient.publish(TOPIC_DESIRED_HUMIDITY_GET, str_value);
             break;
         }
         case DPID_FAN_SPEED: { // 106 / 6A
             char str_value[2];
             sprintf(str_value, "%d", du->byte_value);
-            logf("Sending fan speed level: %d\n", du->byte_value);
-            mqtt_client.publish(TOPIC_FAN_SPEED_GET, str_value);
+            logfmt("Sending fan speed level: %d\n", du->byte_value);
+            mqttClient.publish(TOPIC_FAN_SPEED_GET, str_value);
             break;
         }
         case DPID_TIMER: { // 108 / 6C
             char str_value[2];
             sprintf(str_value, "%d", du->byte_value);
-            logf("Sending timer setting: %d\n", du->byte_value);
-            mqtt_client.publish(TOPIC_TIMER_GET, str_value);
+            logfmt("Sending timer setting: %d\n", du->byte_value);
+            mqttClient.publish(TOPIC_TIMER_GET, str_value);
             break;
         }
         case DPID_HUMIDITY: { // 109 / 6D
             char str_value[5];
             sprintf(str_value, "%d", du->int_value);
-            logf("Sending humidity: %d\n", du->int_value);
-            mqtt_client.publish(TOPIC_HUMIDITY_GET, str_value);
+            logfmt("Sending humidity: %d\n", du->int_value);
+            mqttClient.publish(TOPIC_HUMIDITY_GET, str_value);
             break;
         }
     }
@@ -459,7 +463,6 @@ void mcu_handler(HardwareSerial *serial)
         }
 
         case CMD_RESET_MODULE: {
-            // asm volatile ("jmp 0");
             break;
         }
 
