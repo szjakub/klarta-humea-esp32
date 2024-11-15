@@ -111,6 +111,11 @@ int ascii_bytes_to_int(byte *payload, unsigned int length, int fallback)
 }
 
 void mqtt_callback(char *topic, byte *payload, unsigned int length) {
+    logfmt("Received data from mqtt topic %s - ", topic);
+    for (int i=0; i<length; i++) {
+        logfmt("0x%02X ",(uint8_t)payload[i]);
+    }
+    logfmt("\n");
     if (strcmp(topic, TOPIC_POWER_STATE_SET) == 0) {
         uint8_t state = (uint8_t)ascii_bytes_to_int(payload, length, 0);
         DataUnit du;
@@ -238,18 +243,6 @@ void mqtt_callback(char *topic, byte *payload, unsigned int length) {
         init_data_frame(&respFrame, &params);
         write_data_frame(&respFrame);
     }
-    logfmt("Received data from mqtt topic %s - ", topic);
-    for (int i=0; i<length; i++) {
-        logfmt("0x%02X ",(uint8_t)payload[i]);
-    }
-    logfmt("\n");
-    // LOGLN(topic);
-    // for (int i=0; i<length; i++) {
-    //     LOG((uint8_t)payload[i]);
-    //     LOG(" ");
-    // }
-    // LOGLN("")
-    // LOGLN(length);
 }
 
 void write_data_frame(DataFrame *frame) {
