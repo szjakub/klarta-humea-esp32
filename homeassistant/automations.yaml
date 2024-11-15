@@ -21,6 +21,10 @@
   trigger:
     - platform: state
       entity_id: input_select.klarta_fan_speed
+  # condition:
+  #   - condition: template
+  #     value_template: >
+  #       {{ trigger.to_state.context.user_id is not none }}
   action:
     - service: mqtt.publish
       data:
