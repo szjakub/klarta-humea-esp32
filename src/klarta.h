@@ -1,9 +1,42 @@
+#include "HardwareSerial.h"
+
+extern "C"
+{
+#include "simpletuya.h"
+}
+
+#ifdef DEBUG
+#define LOG(data)           \
+    {                       \
+        Serial.print(data); \
+    }
+
+#define LOGLN(data)           \
+    {                         \
+        Serial.println(data); \
+    }
+
+#define LOGBUF(buffer, prefix)                   \
+    ({                                           \
+        char *str = bytes_array_to_str(&buffer); \
+        Serial.print(prefix);                    \
+        Serial.print(" ");                       \
+        Serial.println(str);                     \
+        free(str);                               \
+    })
+
+#else
+#define LOG(data)
+#define LOGLN(data)
+#define LOGBUF(buffer, prefix)
+#endif
+
 #define BLUE 255, 255, 200
 #define RED 200, 255, 255
 #define GREEN 255, 200, 255
 #define YELLOW 200, 200, 255
 
-#define HEALTHCHECK_INTERVAL 15000 // ms
+#define HEALTHCHECK_INTERVAL 15000  // ms
 
 #define TOPIC_POWER_STATE_SET "klarta/state/set"
 #define TOPIC_POWER_STATE_GET "klarta/state/get"
@@ -30,8 +63,6 @@
 
 #define TOPIC_HUMIDITY_GET "klarta/humidity/get"
 
-
-
 /*
  * |    DPID    |
  * | Dec | Hex  | Type | Allowed Values |    Description    |
@@ -39,28 +70,29 @@
  * | 10  | 0x0A | bool | 0/1            | Power State       | OK
  * | 101 | 0x65 | char | 0/1            | Water Level       | OK
  * | 102 | 0x66 | char | 0/1/2/3        | Night Light       | OK
- * | 103 | 0x67 | bool | 0/1            | Sleep Mode        | ?
+ * | 103 | 0x67 | bool | 0/1            | Sleep Mode        | OK
  * | 104 | 0x68 | bool | 0/1            | Auto Mode         | OK
- * | 105 | 0x69 | char | 0/1/.../8      | Desired Humidity  | ?
+ * | 105 | 0x69 | char | 0/1/.../8      | Desired Humidity  | OK
  * | 106 | 0x6A | int  | 0/1/2/3        | Fan Speed         | OK
  * | 107 | 0x6B | char | 0/1            | Filter Status     | ?
- * | 108 | 0x6C | char | 0/1/.../12     | Timer Settings    | ?
+ * | 108 | 0x6C | char | 0/1/.../12     | Timer Settings    | OK
  * | 109 | 0x6D | int  | 0-100          | Humidity          | OK
  */
 
+typedef uint8_t byte;
 
 typedef enum
 {
-    DPID_POWER_STATE    = 0x0A,
-    DPID_WATER_LEVEL    = 0x65,
-    DPID_NIGHT_LIGHT    = 0x66,
-    DPID_SLEEP_MODE     = 0x67,
-    DPID_AUTO_MODE      = 0x68,
-    DPID_DES_HUMIDITY   = 0x69,
-    DPID_FAN_SPEED      = 0x6A,
-    DPID_FILTER_STATUS  = 0x6B,
-    DPID_TIMER          = 0x6C,
-    DPID_HUMIDITY       = 0x6D
+    DPID_POWER_STATE   = 0x0A,
+    DPID_WATER_LEVEL   = 0x65,
+    DPID_NIGHT_LIGHT   = 0x66,
+    DPID_SLEEP_MODE    = 0x67,
+    DPID_AUTO_MODE     = 0x68,
+    DPID_DES_HUMIDITY  = 0x69,
+    DPID_FAN_SPEED     = 0x6A,
+    DPID_FILTER_STATUS = 0x6B,
+    DPID_TIMER         = 0x6C,
+    DPID_HUMIDITY      = 0x6D
 } DPID;
 
 typedef enum
@@ -71,13 +103,11 @@ typedef enum
     FAN_SPEED_TURBO  = 0x03
 } FanSpeed;
 
-
 typedef enum
 {
     AUTO_MODE_OFF = 0x00,
     AUTO_MODE_ON  = 0x01
 } AutoMode;
-
 
 typedef enum
 {
@@ -85,19 +115,17 @@ typedef enum
     STATE_ON  = 0x01
 } BinaryState;
 
+typedef enum
+{
+    NIGHT_LIGHT_OFF  = 0x00,
+    NIGHT_LIGHT_LOW  = 0x01,
+    NIGHT_LIGHT_MED  = 0x02,
+    NIGHT_LIGHT_HIGH = 0x03
+} LightLevel;
 
 typedef enum
 {
-    NIGHT_LIGHT_OFF     = 0x00,
-    NIGHT_LIGHT_LOW     = 0x01,
-    NIGHT_LIGHT_MED     = 0x02,
-    NIGHT_LIGHT_HIGH    = 0x03
-} NightLightLevel;
-
-
-typedef enum
-{
-    DES_HUMIDITY_CO = 0x00, // continuously
+    DES_HUMIDITY_CO = 0x00,  // continuously
     DES_HUMIDITY_40 = 0x01,
     DES_HUMIDITY_44 = 0x02,
     DES_HUMIDITY_50 = 0x03,
@@ -125,3 +153,20 @@ typedef enum
     TIMER_12H = 0x0C,
 } TimerSetting;
 
+void logfmt(const char *format, ...);
+
+int ascii_bytes_to_int(uint8_t *payload, unsigned int length, int fallback);
+
+void mqtt_callback(char *topic, uint8_t *payload, unsigned int length);
+
+void mqtt_handler(char *topic, uint8_t *payload, unsigned int length);
+
+void send_data(DataFrame *frame);
+
+void send_healthcheck(void);
+
+void mcu_handler(HardwareSerial *serial);
+
+void write_data_frame(DataFrame *frame);
+
+bool serial_read_frame(HardwareSerial *serial, ByteArray *buffer);
