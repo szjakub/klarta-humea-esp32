@@ -1,8 +1,0 @@
-BasedOnStyle: google
-IndentWidth: 4
-UseTab: Never
-BreakBeforeBraces: Allman
-ColumnLimit: 100
-AlignConsecutiveAssignments: true
-# CompactEmptyFunctionBodies: true
-AllowShortFunctionsOnASingleLine: Empty
