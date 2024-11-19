@@ -36,32 +36,68 @@ void setup()
     WiFi.mode(WIFI_STA);
     WiFi.disconnect(true);
     WiFi.setHostname(WIFI_HOSTNAME);
-    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-    while (WiFi.status() != WL_CONNECTED)
-    {
-        delay(500);
-        LOG('.');
-    }
 
-    if (mqttClient.connect(MQTT_CLIENT_ID, MQTT_USER, MQTT_PASSWORD))
-    {
-        mqttClient.subscribe(TOPIC_POWER_STATE_SET);
-        mqttClient.subscribe(TOPIC_NIGHT_LIGHT_SET);
-        mqttClient.subscribe(TOPIC_SLEEP_MODE_SET);
-        mqttClient.subscribe(TOPIC_AUTO_MODE_SET);
-        mqttClient.subscribe(TOPIC_FAN_SPEED_SET);
-        mqttClient.subscribe(TOPIC_AUTO_MODE_SET);
-        mqttClient.subscribe(TOPIC_DESIRED_HUMIDITY_SET);
-        mqttClient.subscribe(TOPIC_TIMER_SET);
-    }
+    reconnect_wifi();
+    reconnect_mqtt();
 }
 
 void loop()
 {
+    if (WiFi.status() != WL_CONNECTED)
+    {
+        reconnect_wifi();
+    }
+
+    if (!mqttClient.connected())
+    {
+        reconnect_mqtt();
+    }
+
     mqttClient.loop();
     send_healthcheck();
     mcu_handler(serial);
 }
+
+void reconnect_wifi()
+{
+    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+    while (WiFi.status() != WL_CONNECTED)
+    {
+        logfmt(".");
+        delay(300);
+    }
+    logfmt("WiFi Connected");
+}
+
+void reconnect_mqtt()
+{
+    while (!mqttClient.connected())
+    {
+        if (WiFi.status() != WL_CONNECTED)
+        {
+            break;
+        }
+
+        logfmt("Attempting MQTT connection...");
+        if (mqttClient.connect(MQTT_CLIENT_ID, MQTT_USER, MQTT_PASSWORD))
+        {
+            mqttClient.subscribe(TOPIC_POWER_STATE_SET);
+            mqttClient.subscribe(TOPIC_NIGHT_LIGHT_SET);
+            mqttClient.subscribe(TOPIC_SLEEP_MODE_SET);
+            mqttClient.subscribe(TOPIC_AUTO_MODE_SET);
+            mqttClient.subscribe(TOPIC_FAN_SPEED_SET);
+            mqttClient.subscribe(TOPIC_AUTO_MODE_SET);
+            mqttClient.subscribe(TOPIC_DESIRED_HUMIDITY_SET);
+            mqttClient.subscribe(TOPIC_TIMER_SET);
+            logfmt("MQTT connected");
+        }
+        else
+        {
+            delay(5000);
+        }
+    }
+}
+
 
 int ascii_bytes_to_int(byte *payload, unsigned int length, int fallback)
 {

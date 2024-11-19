@@ -155,6 +155,10 @@ typedef enum
 
 void logfmt(const char *format, ...);
 
+void reconnect_wifi();
+
+void reconnect_mqtt();
+
 int ascii_bytes_to_int(uint8_t *payload, unsigned int length, int fallback);
 
 void mqtt_callback(char *topic, uint8_t *payload, unsigned int length);
