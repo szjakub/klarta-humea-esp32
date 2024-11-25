@@ -31,12 +31,9 @@ extern "C"
 #define LOGBUF(buffer, prefix)
 #endif
 
-#define BLUE 255, 255, 200
-#define RED 200, 255, 255
-#define GREEN 255, 200, 255
-#define YELLOW 200, 200, 255
-
 #define HEALTHCHECK_INTERVAL 15000  // ms
+#define WIFI_RECONNECTION_INTERVAL 30000  // ms
+#define MQTT_RECONNECTION_INTERVAL 30000  // ms
 
 #define TOPIC_POWER_STATE_SET "klarta/state/set"
 #define TOPIC_POWER_STATE_GET "klarta/state/get"
@@ -155,9 +152,9 @@ typedef enum
 
 void logfmt(const char *format, ...);
 
-void reconnect_wifi();
+void checkWiFiConnection();
 
-void reconnect_mqtt();
+void checkMQTTConnection();
 
 int ascii_bytes_to_int(uint8_t *payload, unsigned int length, int fallback);
 

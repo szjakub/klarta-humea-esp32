@@ -4,10 +4,8 @@
 #include <klarta.h>
 #include <secrets.h>
 #include <string.h>
-
-#include <cstdint>
-
 #include "Arduino.h"
+#include "simpletuya.h"
 
 #define RX_1 12
 #define TX_1 13
@@ -36,64 +34,65 @@ void setup()
     WiFi.mode(WIFI_STA);
     WiFi.disconnect(true);
     WiFi.setHostname(WIFI_HOSTNAME);
-
-    reconnect_wifi();
-    reconnect_mqtt();
+    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+    logfmt("Connecting to WiFi ..\n");
+    while (WiFi.status() != WL_CONNECTED) {
+        logfmt(".");
+        delay(1000);
+    }
+    if (mqttClient.connect(MQTT_CLIENT_ID, MQTT_USER, MQTT_PASSWORD))
+    {
+        mqttClient.subscribe(TOPIC_POWER_STATE_SET);
+        mqttClient.subscribe(TOPIC_NIGHT_LIGHT_SET);
+        mqttClient.subscribe(TOPIC_SLEEP_MODE_SET);
+        mqttClient.subscribe(TOPIC_AUTO_MODE_SET);
+        mqttClient.subscribe(TOPIC_FAN_SPEED_SET);
+        mqttClient.subscribe(TOPIC_AUTO_MODE_SET);
+        mqttClient.subscribe(TOPIC_DESIRED_HUMIDITY_SET);
+        mqttClient.subscribe(TOPIC_TIMER_SET);
+        logfmt("MQTT connected\n");
+    }
 }
 
 void loop()
 {
-    if (WiFi.status() != WL_CONNECTED)
-    {
-        reconnect_wifi();
-    }
-
-    if (!mqttClient.connected())
-    {
-        reconnect_mqtt();
-    }
-
+    checkWiFiConnection();
+    checkMQTTConnection();
     mqttClient.loop();
+
     send_healthcheck();
     mcu_handler(serial);
 }
 
-void reconnect_wifi()
+
+void checkWiFiConnection()
 {
-    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-    while (WiFi.status() != WL_CONNECTED)
+    static unsigned long last_wifi_check = 0;
+    if (WiFi.status() != WL_CONNECTED)
     {
-        logfmt(".");
-        delay(300);
+        unsigned long current_time = millis();
+        if (current_time - last_wifi_check >= WIFI_RECONNECTION_INTERVAL)
+        {
+            logfmt("Reconnecting to WiFI...\n");
+            WiFi.disconnect();
+            WiFi.reconnect();
+            last_wifi_check = current_time;
+        }
     }
-    logfmt("WiFi Connected");
 }
 
-void reconnect_mqtt()
-{
-    while (!mqttClient.connected())
-    {
-        if (WiFi.status() != WL_CONNECTED)
-        {
-            break;
-        }
 
-        logfmt("Attempting MQTT connection...");
-        if (mqttClient.connect(MQTT_CLIENT_ID, MQTT_USER, MQTT_PASSWORD))
+void checkMQTTConnection()
+{
+    static unsigned long last_mqtt_check = 0;
+    if (!mqttClient.connected() && WiFi.status() == WL_CONNECTED)
+    {
+        unsigned long current_time = millis();
+        if (current_time - last_mqtt_check >= MQTT_RECONNECTION_INTERVAL)
         {
-            mqttClient.subscribe(TOPIC_POWER_STATE_SET);
-            mqttClient.subscribe(TOPIC_NIGHT_LIGHT_SET);
-            mqttClient.subscribe(TOPIC_SLEEP_MODE_SET);
-            mqttClient.subscribe(TOPIC_AUTO_MODE_SET);
-            mqttClient.subscribe(TOPIC_FAN_SPEED_SET);
-            mqttClient.subscribe(TOPIC_AUTO_MODE_SET);
-            mqttClient.subscribe(TOPIC_DESIRED_HUMIDITY_SET);
-            mqttClient.subscribe(TOPIC_TIMER_SET);
-            logfmt("MQTT connected");
-        }
-        else
-        {
-            delay(5000);
+            logfmt("Reconnecting to MQTT...\n");
+            mqttClient.connect(MQTT_CLIENT_ID, MQTT_USER, MQTT_PASSWORD);
+            last_mqtt_check = current_time;
         }
     }
 }
@@ -302,7 +301,7 @@ void send_data(DataFrame *frame)
         {  // 105 / 69
             char str_value[2];
             sprintf(str_value, "%d", du->byte_value);
-            logfmt("Sending desired humidity: %d\n", du->int_value);
+            logfmt("Sending desired humidity: %d\n", du->byte_value);
             mqttClient.publish(TOPIC_DESIRED_HUMIDITY_GET, str_value);
             break;
         }
