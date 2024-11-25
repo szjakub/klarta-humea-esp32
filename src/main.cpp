@@ -1,4 +1,3 @@
-#include <PubSubClient.h>
 #include <SPI.h>
 #include <WiFi.h>
 #include <klarta.h>
@@ -7,18 +6,6 @@
 #include "Arduino.h"
 #include "simpletuya.h"
 
-#define RX_1 12
-#define TX_1 13
-
-void logfmt(const char *format, ...)
-{
-    char buffer[256];
-    va_list args;
-    va_start(args, format);
-    vsnprintf(buffer, sizeof(buffer), format, args);
-    va_end(args);
-    LOG(buffer);
-}
 
 HardwareSerial *serial = &Serial1;
 IPAddress haServerIP(HA_SERVER_ADDR);
@@ -27,30 +14,22 @@ PubSubClient mqttClient(haServerIP, 1883, mqtt_callback, wifiClient);
 
 void setup()
 {
-#ifdef DEBUG
-    Serial.begin(115200);
-#endif
+    DEBUG_INIT();
+
     serial->begin(9600, SERIAL_8N1, RX_1, TX_1);
     WiFi.mode(WIFI_STA);
     WiFi.disconnect(true);
     WiFi.setHostname(WIFI_HOSTNAME);
     WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-    logfmt("Connecting to WiFi ..\n");
+
     while (WiFi.status() != WL_CONNECTED) {
-        logfmt(".");
+        DEBUG_PRINTF(".");
         delay(1000);
     }
+
     if (mqttClient.connect(MQTT_CLIENT_ID, MQTT_USER, MQTT_PASSWORD))
     {
-        mqttClient.subscribe(TOPIC_POWER_STATE_SET);
-        mqttClient.subscribe(TOPIC_NIGHT_LIGHT_SET);
-        mqttClient.subscribe(TOPIC_SLEEP_MODE_SET);
-        mqttClient.subscribe(TOPIC_AUTO_MODE_SET);
-        mqttClient.subscribe(TOPIC_FAN_SPEED_SET);
-        mqttClient.subscribe(TOPIC_AUTO_MODE_SET);
-        mqttClient.subscribe(TOPIC_DESIRED_HUMIDITY_SET);
-        mqttClient.subscribe(TOPIC_TIMER_SET);
-        logfmt("MQTT connected\n");
+        mqttSubscribe(&mqttClient);
     }
 }
 
@@ -73,7 +52,7 @@ void checkWiFiConnection()
         unsigned long current_time = millis();
         if (current_time - last_wifi_check >= WIFI_RECONNECTION_INTERVAL)
         {
-            logfmt("Reconnecting to WiFI...\n");
+            DEBUG_PRINTF("Reconnecting to WiFI...\n");
             WiFi.disconnect();
             WiFi.reconnect();
             last_wifi_check = current_time;
@@ -90,11 +69,25 @@ void checkMQTTConnection()
         unsigned long current_time = millis();
         if (current_time - last_mqtt_check >= MQTT_RECONNECTION_INTERVAL)
         {
-            logfmt("Reconnecting to MQTT...\n");
+            DEBUG_PRINTF("Reconnecting to MQTT...\n");
             mqttClient.connect(MQTT_CLIENT_ID, MQTT_USER, MQTT_PASSWORD);
+            mqttSubscribe(&mqttClient);
             last_mqtt_check = current_time;
         }
     }
+}
+
+
+void mqttSubscribe(PubSubClient *mqtt_client)
+{
+    mqttClient.subscribe(TOPIC_POWER_STATE_SET);
+    mqttClient.subscribe(TOPIC_NIGHT_LIGHT_SET);
+    mqttClient.subscribe(TOPIC_SLEEP_MODE_SET);
+    mqttClient.subscribe(TOPIC_AUTO_MODE_SET);
+    mqttClient.subscribe(TOPIC_FAN_SPEED_SET);
+    mqttClient.subscribe(TOPIC_AUTO_MODE_SET);
+    mqttClient.subscribe(TOPIC_DESIRED_HUMIDITY_SET);
+    mqttClient.subscribe(TOPIC_TIMER_SET);
 }
 
 
@@ -102,7 +95,7 @@ int ascii_bytes_to_int(byte *payload, unsigned int length, int fallback)
 {
     if (length > 10)
     {
-        logfmt("Value of length %d is too big\n", length);
+        DEBUG_PRINTF("Value of length %d is too big\n", length);
         return fallback;
     }
     char buffer[11];
@@ -112,7 +105,7 @@ int ascii_bytes_to_int(byte *payload, unsigned int length, int fallback)
         byte value = payload[i];
         if (value < 0x30 || value > 0x39)
         {
-            logfmt("ASCII value of %d is not a number\n", (unsigned char)value);
+            DEBUG_PRINTF("ASCII value of %d is not a number\n", (unsigned char)value);
             return fallback;
         }
         buffer[i] = (char)payload[i];
@@ -123,12 +116,12 @@ int ascii_bytes_to_int(byte *payload, unsigned int length, int fallback)
 
 void mqtt_callback(char *topic, byte *payload, unsigned int length)
 {
-    logfmt("Received data from mqtt topic %s - ", topic);
+    DEBUG_PRINTF("Received data from mqtt topic %s - ", topic);
     for (int i = 0; i < length; i++)
     {
-        logfmt("0x%02X ", (uint8_t)payload[i]);
+        DEBUG_PRINTF("0x%02X ", (uint8_t)payload[i]);
     }
-    logfmt("\n");
+    DEBUG_PRINTF("\n");
     if (strcmp(topic, TOPIC_POWER_STATE_SET) == 0)
     {
         uint8_t state = (uint8_t)ascii_bytes_to_int(payload, length, 0);
@@ -224,7 +217,9 @@ void write_data_frame(DataFrame *frame)
 {
     ByteArray buffer;
     df2bytes(&buffer, frame);
-    LOGBUF(buffer, "TX");
+    char *str = bytes_array_to_str(&buffer);
+    DEBUG_PRINTF("TX %s\n", str);
+    free(str);
     serial->write(buffer.bytes, buffer.len);
 }
 
@@ -261,7 +256,7 @@ void send_data(DataFrame *frame)
         {  // 10 / 0A
             char str_value[2];
             sprintf(str_value, "%d", du->byte_value);
-            logfmt("Sending state: %d\n", du->byte_value);
+            DEBUG_PRINTF("Sending state: %d\n", du->byte_value);
             mqttClient.publish(TOPIC_POWER_STATE_GET, str_value);
             break;
         }
@@ -269,7 +264,7 @@ void send_data(DataFrame *frame)
         {  // 101 / 65
             char str_value[2];
             sprintf(str_value, "%d", du->byte_value);
-            logfmt("Sending water level state: %d\n", du->byte_value);
+            DEBUG_PRINTF("Sending water level state: %d\n", du->byte_value);
             mqttClient.publish(TOPIC_WATER_LEVEL_GET, str_value);
             break;
         }
@@ -277,7 +272,7 @@ void send_data(DataFrame *frame)
         {  // 102 / 66
             char str_value[2];
             sprintf(str_value, "%d", du->byte_value);
-            logfmt("Sending night light state: %d\n", du->byte_value);
+            DEBUG_PRINTF("Sending night light state: %d\n", du->byte_value);
             mqttClient.publish(TOPIC_NIGHT_LIGHT_GET, str_value);
             break;
         }
@@ -285,7 +280,7 @@ void send_data(DataFrame *frame)
         {  // 103 / 67
             char str_value[2];
             sprintf(str_value, "%d", du->byte_value);
-            logfmt("Sending sleep mode state: %d\n", du->byte_value);
+            DEBUG_PRINTF("Sending sleep mode state: %d\n", du->byte_value);
             mqttClient.publish(TOPIC_SLEEP_MODE_GET, str_value);
             break;
         }
@@ -293,7 +288,7 @@ void send_data(DataFrame *frame)
         {  // 104 / 68
             char str_value[2];
             sprintf(str_value, "%d", du->byte_value);
-            logfmt("Sending auto mode state: %d\n", du->byte_value);
+            DEBUG_PRINTF("Sending auto mode state: %d\n", du->byte_value);
             mqttClient.publish(TOPIC_AUTO_MODE_GET, str_value);
             break;
         }
@@ -301,7 +296,7 @@ void send_data(DataFrame *frame)
         {  // 105 / 69
             char str_value[2];
             sprintf(str_value, "%d", du->byte_value);
-            logfmt("Sending desired humidity: %d\n", du->byte_value);
+            DEBUG_PRINTF("Sending desired humidity: %d\n", du->byte_value);
             mqttClient.publish(TOPIC_DESIRED_HUMIDITY_GET, str_value);
             break;
         }
@@ -309,7 +304,7 @@ void send_data(DataFrame *frame)
         {  // 106 / 6A
             char str_value[2];
             sprintf(str_value, "%d", du->byte_value);
-            logfmt("Sending fan speed level: %d\n", du->byte_value);
+            DEBUG_PRINTF("Sending fan speed level: %d\n", du->byte_value);
             mqttClient.publish(TOPIC_FAN_SPEED_GET, str_value);
             break;
         }
@@ -317,7 +312,7 @@ void send_data(DataFrame *frame)
         {  // 108 / 6C
             char str_value[2];
             sprintf(str_value, "%d", du->byte_value);
-            logfmt("Sending timer setting: %d\n", du->byte_value);
+            DEBUG_PRINTF("Sending timer setting: %d\n", du->byte_value);
             mqttClient.publish(TOPIC_TIMER_GET, str_value);
             break;
         }
@@ -325,7 +320,7 @@ void send_data(DataFrame *frame)
         {  // 109 / 6D
             char str_value[5];
             sprintf(str_value, "%d", du->int_value);
-            logfmt("Sending humidity: %d\n", du->int_value);
+            DEBUG_PRINTF("Sending humidity: %d\n", du->int_value);
             mqttClient.publish(TOPIC_HUMIDITY_GET, str_value);
             break;
         }
@@ -349,7 +344,9 @@ void mcu_handler(HardwareSerial *serial)
     {
         return;
     }
-    LOGBUF(buffer, "RX");
+    char *str = bytes_array_to_str(&buffer);
+    DEBUG_PRINTF("RX %s\n", str);
+    free(str);
 
     DataFrame *frame = bytes2df(buffer.bytes, buffer.len);
     if (frame == NULL)

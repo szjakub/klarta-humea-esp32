@@ -1,4 +1,5 @@
 #include "HardwareSerial.h"
+#include <PubSubClient.h>
 
 extern "C"
 {
@@ -6,30 +7,15 @@ extern "C"
 }
 
 #ifdef DEBUG
-#define LOG(data)           \
-    {                       \
-        Serial.print(data); \
-    }
-
-#define LOGLN(data)           \
-    {                         \
-        Serial.println(data); \
-    }
-
-#define LOGBUF(buffer, prefix)                   \
-    ({                                           \
-        char *str = bytes_array_to_str(&buffer); \
-        Serial.print(prefix);                    \
-        Serial.print(" ");                       \
-        Serial.println(str);                     \
-        free(str);                               \
-    })
-
+    #define DEBUG_INIT() Serial.begin(115200)
+    #define DEBUG_PRINTF(...) Serial.printf(__VA_ARGS__)
 #else
-#define LOG(data)
-#define LOGLN(data)
-#define LOGBUF(buffer, prefix)
+    #define DEBUG_INIT()
+    #define DEBUG_PRINTF(...)
 #endif
+
+#define RX_1 12
+#define TX_1 13
 
 #define HEALTHCHECK_INTERVAL 15000  // ms
 #define WIFI_RECONNECTION_INTERVAL 30000  // ms
@@ -150,11 +136,11 @@ typedef enum
     TIMER_12H = 0x0C,
 } TimerSetting;
 
-void logfmt(const char *format, ...);
-
 void checkWiFiConnection();
 
 void checkMQTTConnection();
+
+void mqttSubscribe(PubSubClient *mqtt_client);
 
 int ascii_bytes_to_int(uint8_t *payload, unsigned int length, int fallback);
 
