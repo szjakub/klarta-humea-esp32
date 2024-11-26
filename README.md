@@ -4,8 +4,8 @@ This project enables integration of the Klarta Humea humidifier with Home Assist
 ![Klarta View](assets/klarta-view.png)
 
 # Tested platforms
+- Arduino Nano ESP32 (recommended)
 - ESP32-DevKitC
-- Arduino Nano ESP32
 
 # Requirements
 - Home Assistant with [the MQTT integration](https://www.home-assistant.io/integrations/mqtt/) or just an MQTT server
@@ -28,10 +28,10 @@ This project enables integration of the Klarta Humea humidifier with Home Assist
 // Wi-Fi Configuration
 #define WIFI_SSID "your_wifi_ssid"
 #define WIFI_PASSWORD "your_wifi_password"
-#define WIFI_HOSTNAME "klarta"
+#define WIFI_HOSTNAME "KlartaHumea"
 
 // MQTT Configuration
-#define MQTT_CLIENT_ID "mqtt_client_id" // put whatever here
+#define MQTT_CLIENT_ID "KlartaHumeaClient"
 #define MQTT_USER "mqtt_username"
 #define MQTT_PASSWORD "mqtt_password"
 
